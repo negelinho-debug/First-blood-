@@ -20,15 +20,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unpack FIRST BLOOD
+      - name: Unpack FIRST BLOOD with parkour
         shell: bash
         run: |
           set -euo pipefail
-          unzip -q FIRST_BLOOD_GAME.zip -d .
+
+          unzip -oq FIRST_BLOOD_PARKOUR_v02.zip -d .
+
           test -f project.godot
           test -f scenes/Main.tscn
           test -f scripts/main.gd
           test -f export_presets.cfg
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("project.godot")
+          s = p.read_text(encoding="utf-8")
+          key = "textures/vram_compression/import_etc2_astc=true"
+
+          if key not in s:
+              assert "[rendering]" in s
+              s = s.replace(
+                  "[rendering]",
+                  "[rendering]\n" + key,
+                  1
+              )
+              p.write_text(s, encoding="utf-8")
+
+          print("iOS ETC2/ASTC enabled")
+          PY
 
       - name: Install Godot
         shell: bash
@@ -40,6 +61,7 @@ jobs:
             -o "$RUNNER_TEMP/godot.zip"
 
           mkdir -p "$RUNNER_TEMP/godot"
+
           unzip -q "$RUNNER_TEMP/godot.zip" \
             -d "$RUNNER_TEMP/godot"
 
@@ -77,6 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           "$GODOT_BIN" --headless --path . \
             --editor --import --quit
 
@@ -84,13 +107,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p build/ios
 
-          "$GODOT_BIN" --headless --path . \
+          "$GODOT_BIN" --headless --verbose --path . \
             --export-release "iOS" \
             "build/ios/FirstBlood.xcodeproj"
 
           test -d build/ios/FirstBlood.xcodeproj
+
+          xcodebuild -list \
+            -project build/ios/FirstBlood.xcodeproj
 
       - name: Build unsigned iOS app
         shell: bash
